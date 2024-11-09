@@ -1,0 +1,402 @@
+#main
+import sys
+import cv2
+import pyautogui
+import mediapipe as mp
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QImage, QPixmap
+
+# Detect gesture function
+def detect_gesture(frame):
+    hand_detector = mp.solutions.hands.Hands()
+    drawing_utils = mp.solutions.drawing_utils
+    screen_width, screen_height = pyautogui.size()
+    
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    output = hand_detector.process(rgb_frame)
+    hands = output.multi_hand_landmarks
+    
+    if hands:
+        for hand in hands:
+            drawing_utils.draw_landmarks(frame, hand)
+            landmarks = hand.landmark
+            for id, landmark in enumerate(landmarks):
+                x = int(landmark.x * frame.shape[1])
+                y = int(landmark.y * frame.shape[0])
+                
+                if id == 8:  # Index finger tip
+                    index_x = screen_width / frame.shape[1] * x
+                    index_y = screen_height / frame.shape[0] * y
+                if id == 4:  # Thumb tip
+                    thumb_x = screen_width / frame.shape[1] * x
+                    thumb_y = screen_height / frame.shape[0] * y
+                    if abs(index_y - thumb_y) < 20:
+                        pyautogui.click()
+                    elif abs(index_y - thumb_y) < 100:
+                        pyautogui.moveTo(index_x, index_y)
+
+# Detect gaze function placeholder
+def detect_gaze(frame):
+    # Implement gaze tracking code here
+    # For now, this returns fixed coordinates
+    return (500, 300)  # Example coordinates
+
+class HandGestureGazeControlApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        
+        # State for current mode
+        self.mode = "gesture"  # Default to gesture control
+        self.cap = cv2.VideoCapture(0)
+        
+        # Timer to update frame
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(20)
+        
+    def initUI(self):
+        self.setWindowTitle('Hand Gesture and Gaze Control')
+        self.setGeometry(100, 100, 800, 600)
+        
+        self.label = QLabel(self)
+        self.label.setAlignment(Qt.AlignCenter)
+        
+        # Buttons to toggle modes
+        self.gesture_button = QPushButton("Gesture Mode", self)
+        self.gesture_button.clicked.connect(self.activate_gesture_mode)
+        
+        self.gaze_button = QPushButton("Gaze Mode", self)
+        self.gaze_button.clicked.connect(self.activate_gaze_mode)
+        
+        # Layout
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.gesture_button)
+        button_layout.addWidget(self.gaze_button)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(button_layout)
+        main_layout.addWidget(self.label)
+        
+        container = QWidget()
+        container.setLayout(main_layout)
+        self.setCentralWidget(container)
+
+    def activate_gesture_mode(self):
+        self.mode = "gesture"
+
+    def activate_gaze_mode(self):
+        self.mode = "gaze"
+    
+    def update_frame(self):
+        ret, frame = self.cap.read()
+        if ret:
+            frame = self.process_frame(frame)
+            image = QImage(frame, frame.shape[1], frame.shape[0], frame.strides[0], QImage.Format_RGB888)
+            self.label.setPixmap(QPixmap.fromImage(image))
+        
+    def process_frame(self, frame):
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        if self.mode == "gesture":
+            detect_gesture(frame)  # Gesture tracking mode
+        elif self.mode == "gaze":
+            coords = detect_gaze(frame)  # Gaze tracking mode
+            if coords:
+                screen_x, screen_y = coords
+                pyautogui.moveTo(screen_x, screen_y)
+        
+        return frame
+    
+    def closeEvent(self, event):
+        self.cap.release()
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = HandGestureGazeControlApp()
+    window.show()
+    sys.exit(app.exec_())
+
+    #HandGesture
+
+import sys
+import cv2
+import pyautogui
+import mediapipe as mp
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QImage, QPixmap
+
+class HandGestureGazeControlApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+        # Initialize MediaPipe Hands and Drawing utils
+        self.hand_detector = mp.solutions.hands.Hands()
+        self.drawing_utils = mp.solutions.drawing_utils
+        self.screen_width, self.screen_height = pyautogui.size()
+        self.prev_index_x, self.prev_index_y = 0, 0  # Variables to store previous cursor positions
+
+        # Start video capture
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            print("Error: Could not open webcam.")
+            sys.exit()
+
+        # Timer to update frames
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(50)
+
+    def initUI(self):
+        self.setWindowTitle('Hand Gesture and Gaze Control')
+        self.setGeometry(100, 100, 800, 600)
+
+        self.label = QLabel(self)
+        self.label.setAlignment(Qt.AlignCenter)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.label)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+    def update_frame(self):
+        try:
+            ret, frame = self.cap.read()
+            if not ret:
+                print("Error: Frame capture failed.")
+                return
+            
+            # Process frame for gesture detection and get back the modified frame in RGB
+            processed_frame = self.process_frame(frame)
+            
+            # Display the frame in RGB format
+            image = QImage(processed_frame, processed_frame.shape[1], processed_frame.shape[0], processed_frame.strides[0], QImage.Format_RGB888)
+            self.label.setPixmap(QPixmap.fromImage(image))
+        except Exception as e:
+            print(f"Error in update_frame: {e}")
+
+    def process_frame(self, frame):
+        frame = cv2.flip(frame, 1)  # Flip the frame horizontally
+        frame_height, frame_width, _ = frame.shape
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
+        
+        # Process hand landmarks
+        output = self.hand_detector.process(rgb_frame)
+        hands = output.multi_hand_landmarks
+
+        if hands:
+            for hand in hands:
+                # Draw landmarks on the RGB frame
+                self.drawing_utils.draw_landmarks(rgb_frame, hand, mp.solutions.hands.HAND_CONNECTIONS)
+                landmarks = hand.landmark
+
+                # Define fingertip and base IDs and colors for each finger
+                finger_points = {
+                    'Thumb': (4, 1, (255, 0, 0)),    # Red
+                    'Index': (8, 5, (0, 255, 0)),    # Green
+                    'Middle': (12, 9, (0, 0, 255)),  # Blue
+                    'Ring': (16, 13, (255, 255, 0)), # Cyan
+                    'Pinky': (20, 17, (255, 0, 255)) # Magenta
+                }
+
+                # Draw circles on each fingertip and base
+                for finger, (tip_id, base_id, color) in finger_points.items():
+                    # Draw fingertip
+                    tip_landmark = landmarks[tip_id]
+                    tip_x = int(tip_landmark.x * frame_width)
+                    tip_y = int(tip_landmark.y * frame_height)
+                    cv2.circle(rgb_frame, (tip_x, tip_y), 10, color, -1)
+
+                    # Draw base of the finger
+                    base_landmark = landmarks[base_id]
+                    base_x = int(base_landmark.x * frame_width)
+                    base_y = int(base_landmark.y * frame_height)
+                    cv2.circle(rgb_frame, (base_x, base_y), 10, color, -1)
+
+                # Update cursor movement based on index fingertip
+                index_tip = landmarks[finger_points['Index'][0]]
+                screen_x = self.screen_width * index_tip.x
+                screen_y = self.screen_height * index_tip.y
+
+                # Smooth movement using a weighted average
+                # Increase the weight of the new position to make the cursor move faster
+                smoothed_x = 0.4 * self.prev_index_x + 0.6 * screen_x
+                smoothed_y = 0.4 * self.prev_index_y + 0.6 * screen_y
+
+                self.prev_index_x, self.prev_index_y = smoothed_x, smoothed_y
+
+                # Move cursor to the new smoothed position
+                pyautogui.moveTo(smoothed_x, smoothed_y)
+
+                # Detect click if index and thumb are close
+                thumb_tip = landmarks[finger_points['Thumb'][0]]
+                distance = ((index_tip.x - thumb_tip.x) ** 2 + (index_tip.y - thumb_tip.y) ** 2) ** 0.5
+                if distance < 0.05:  # Adjusted threshold for clicking
+                    pyautogui.click(button='left')
+
+                # Detect double-click if thumb and middle finger are close
+                middle_tip = landmarks[finger_points['Middle'][0]]
+                double_click_distance = ((middle_tip.x - thumb_tip.x) ** 2 + (middle_tip.y - thumb_tip.y) ** 2) ** 0.5
+                if double_click_distance < 0.05:  # Adjusted threshold for double-click
+                    pyautogui.doubleClick(button='left')
+
+                # Scroll detection
+                self.detect_scroll(thumb_tip, landmarks[finger_points['Ring'][0]], landmarks[finger_points['Pinky'][0]], frame_width, frame_height)
+
+                # Volume control
+                index_base = landmarks[finger_points['Index'][1]]
+                pinky_base = landmarks[finger_points['Pinky'][1]]
+
+                # Volume up if thumb and base of index finger are close
+                volume_up_distance = ((thumb_tip.x - index_base.x) ** 2 + (thumb_tip.y - index_base.y) ** 2) ** 0.5
+                if volume_up_distance < 0.05:  # Adjusted threshold for volume up
+                    pyautogui.press("volumeup")
+
+                # Volume down if thumb and base of pinky finger are close
+                volume_down_distance = ((thumb_tip.x - pinky_base.x) ** 2 + (thumb_tip.y - pinky_base.y) ** 2) ** 0.5
+                if volume_down_distance < 0.05:  # Adjusted threshold for volume down
+                    pyautogui.press("volumedown")
+
+        return rgb_frame  # Return the RGB frame for display
+
+    def detect_scroll(self, thumb_tip, ring_tip, pinky_tip, frame_width, frame_height):
+        try:
+            # Convert normalized coordinates to pixel coordinates for distances
+            thumb_x, thumb_y = int(thumb_tip.x * frame_width), int(thumb_tip.y * frame_height)
+            ring_x, ring_y = int(ring_tip.x * frame_width), int(ring_tip.y * frame_height)
+            pinky_x, pinky_y = int(pinky_tip.x * frame_width), int(pinky_tip.y * frame_height)
+
+            # Scroll up if the thumb and ring finger are close
+            distance_up = ((thumb_x - ring_x) ** 2 + (thumb_y - ring_y) ** 2) ** 0.5
+            if distance_up < 40:  # Adjusted threshold for scrolling up
+                pyautogui.scroll(60)  # Increased scroll speed for scrolling up
+
+            # Scroll down if the thumb and pinky finger are close
+            distance_down = ((thumb_x - pinky_x) ** 2 + (thumb_y - pinky_y) ** 2) ** 0.5
+            if distance_down < 40:  # Adjusted threshold for scrolling down
+                pyautogui.scroll(-60)  # Increased scroll speed for scrolling down
+        except Exception as e:
+            print(f"Error in detect_scroll: {e}")
+
+
+    def closeEvent(self, event):
+        self.cap.release()
+        event.accept()
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = HandGestureGazeControlApp()
+    window.show()
+    sys.exit(app.exec_())
+
+
+    #Gazetracking
+
+    import cv2
+import mediapipe as mp
+import pyautogui
+cam = cv2.VideoCapture(0)
+face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
+screen_w, screen_h = pyautogui.size()
+while True:
+    _, frame = cam.read()
+    frame = cv2.flip(frame, 1)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    output = face_mesh.process(rgb_frame)
+    landmark_points = output.multi_face_landmarks
+    frame_h, frame_w, _ = frame.shape
+    if landmark_points:
+        landmarks = landmark_points[0].landmark
+        for id, landmark in enumerate(landmarks[474:478]):
+            x = int(landmark.x * frame_w)
+            y = int(landmark.y * frame_h)
+            cv2.circle(frame, (x, y), 3, (0, 255, 0))
+            if id == 1:
+                screen_x = screen_w * landmark.x
+                screen_y = screen_h * landmark.y
+                pyautogui.moveTo(screen_x, screen_y)
+        left = [landmarks[145], landmarks[159]]
+        for landmark in left:
+            x = int(landmark.x * frame_w)
+            y = int(landmark.y * frame_h)
+            cv2.circle(frame, (x, y), 3, (0, 255, 255))
+        if (left[0].y - left[1].y) < 0.004:
+            pyautogui.click()
+            pyautogui.sleep(1)
+    cv2.imshow('Eye Controlled Mouse', frame)
+    cv2.waitKey(1)
+
+    #GUIWINDOW
+
+    import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
+
+class VisionOSApplication(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        print("Initializing UI...")
+        self.initUI()
+        
+    def initUI(self):
+        self.setWindowTitle('VisionOS Application - Hand Gesture and Gaze Control')
+        self.setGeometry(100, 100, 800, 600)
+        
+        self.label = QLabel(self)
+        self.label.setAlignment(Qt.AlignCenter)
+        
+        # Create buttons for Hand Gesture and Gaze Control
+        self.hand_button = QPushButton('Start Hand Gesture Control', self)
+        self.hand_button.clicked.connect(self.toggle_hand_control)
+        self.gaze_button = QPushButton('Start Gaze Control', self)
+        self.gaze_button.clicked.connect(self.toggle_gaze_control)
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.label)
+        layout.addWidget(self.hand_button)
+        layout.addWidget(self.gaze_button)
+        
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+        
+        print("UI initialized.")
+        
+        # Control flags
+        self.is_hand_control_active = False
+        self.is_gaze_control_active = False
+
+    def toggle_hand_control(self):
+        """ Toggle hand gesture control mode """
+        self.is_hand_control_active = not self.is_hand_control_active
+        if self.is_hand_control_active:
+            self.hand_button.setText('Hand Gesture Control Active')
+        else:
+            self.hand_button.setText('Start Hand Gesture Control')
+        
+    def toggle_gaze_control(self):
+        """ Toggle gaze control mode """
+        self.is_gaze_control_active = not self.is_gaze_control_active
+        if self.is_gaze_control_active:
+            self.gaze_button.setText('Gaze Control Active')
+        else:
+            self.gaze_button.setText('Start Gaze Control')
+
+    def closeEvent(self, event):
+        print("Closing application...")
+        event.accept()
+
+if __name__ == '__main__':
+    print("Starting VisionOS Application...")
+    app = QApplication(sys.argv)
+    window = VisionOSApplication()  # Changed to VisionOSApplication
+    window.show()
+    print("Running VisionOS Application...")
+    sys.exit(app.exec_())
+
